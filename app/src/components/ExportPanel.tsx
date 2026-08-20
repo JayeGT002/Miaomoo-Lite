@@ -168,20 +168,24 @@ export default function ExportPanel({ title, markdown, theme, getPayload, onClos
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-card export-card">
-        <button className="modal-close" onClick={onClose} title="关闭"><Close theme="outline" size="16" /></button>
-
         <div className="export-preview" style={{ background: theme.appBg }}>
           <FormatPreview format={format} title={filename || title || '无标题'} markdown={markdown} theme={theme} />
         </div>
 
-        <div className="export-settings">
+        <div className="export-main">
+          <div className="settings-head">
+            <span className="settings-title">导出</span>
+            <button className="head-close" onClick={onClose} title="关闭"><Close theme="outline" size="16" /></button>
+          </div>
+
+          <div className="export-settings">
           <div className="settings-field">
-            <div className="settings-field-head"><span>文件名</span></div>
+            <div className="export-label">文件名</div>
             <input className="text-input" value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="无标题" />
           </div>
 
           <div className="settings-field">
-            <div className="settings-field-head"><span>格式</span></div>
+            <div className="export-label">导出格式</div>
             <div className="format-grid">
               {EXPORT_FORMATS.map((f) => (
                 <button key={f.id} className={`format-card${format === f.id ? ' active' : ''}`} onClick={() => setFormat(f.id)}>
@@ -192,6 +196,7 @@ export default function ExportPanel({ title, markdown, theme, getPayload, onClos
             </div>
           </div>
 
+          <div className="export-label">选项</div>
           <div className="export-options">
             {format === 'png' && (
               <>
@@ -250,9 +255,14 @@ export default function ExportPanel({ title, markdown, theme, getPayload, onClos
             )}
           </div>
 
-          <button className="primary-btn" disabled={busy} onClick={() => void doExport()}>
-            {busy ? '导出中…' : `导出 ${filename || '无标题'}${fmt.ext}`}
-          </button>
+          </div>
+
+          <div className="export-foot">
+            <button className="ghost-btn" onClick={onClose}>取消</button>
+            <button className="primary-btn" disabled={busy} onClick={() => void doExport()}>
+              {busy ? '导出中…' : `导出 ${filename || '无标题'}${fmt.ext}`}
+            </button>
+          </div>
         </div>
       </div>
     </div>

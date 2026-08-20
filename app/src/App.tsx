@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react'
 import { TextSelection } from '@milkdown/prose/state'
 import type { Node as ProseNode } from '@milkdown/prose/model'
 import TitleBar from './components/TitleBar'
-import EditorArea, { type EditorApi } from './components/EditorArea'
+import EditorArea, { TABLE_STATE_OFF, type EditorApi, type TableState } from './components/EditorArea'
 import FormatBar from './components/FormatBar'
 import DetailsPanel from './components/DetailsPanel'
 import ExportPanel from './components/ExportPanel'
@@ -27,6 +27,7 @@ export default function App() {
   const [showExport, setShowExport] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [outline, setOutline] = useState<OutlineItem[]>([])
+  const [tableState, setTableState] = useState<TableState>(TABLE_STATE_OFF)
   const [stats, setStats] = useState<Stats>({ words: 0, chars: 0, readingMinutes: 0, inputSpeed: 0 })
   const [dates, setDates] = useState({ createdAt: initial.current.createdAt, updatedAt: initial.current.updatedAt })
   const { notices, notify } = useNotify()
@@ -82,6 +83,11 @@ export default function App() {
     setStats(computeStats(markdownRef.current, speedWindow.current))
   }
 
+  // 表格状态变化时才更新（避免每次按键触发重渲染）
+  const onTableState = (s: TableState) => {
+    setTableState((prev) => (prev.inTable === s.inTable && prev.align === s.align ? prev : s))
+  }
+
   const jumpToHeading = (pos: number) => {
     const view = apiRef.current?.getView()
     if (!view) return
@@ -134,6 +140,7 @@ export default function App() {
             theme={theme.tokens}
             onMarkdownChange={onMarkdownChange}
             onDocChange={onDocChange}
+            onTableState={onTableState}
             apiRef={apiRef}
           />
         </div>
@@ -147,7 +154,7 @@ export default function App() {
           />
         )}
       </main>
-      <FormatBar apiRef={apiRef} />
+      <FormatBar apiRef={apiRef} tableState={tableState} />
 
       {showExport && (
         <ExportPanel

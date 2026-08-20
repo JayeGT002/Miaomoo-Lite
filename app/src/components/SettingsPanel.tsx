@@ -1,6 +1,6 @@
 // 设置面板：编辑器 / 字体 / 主题 / 关于
 import { useEffect, useState } from 'react'
-import { Edit, Text, Theme, Info, Close } from '@icon-park/react'
+import { Format, FontSize, Theme, Info, Close } from '@icon-park/react'
 import { BODY_FONTS, CODE_FONTS, THEMES, bodyFontStack, codeFontStack, type EditorSettings, type FontPreset, type ThemeTokens } from '../data'
 import { listSystemFonts } from '../lib/platform'
 
@@ -14,8 +14,8 @@ interface SettingsPanelProps {
 type NavId = 'editor' | 'font' | 'theme' | 'about'
 
 const NAV: { id: NavId; name: string; icon: React.ReactNode }[] = [
-  { id: 'editor', name: '编辑器', icon: <Edit theme="outline" size="16" /> },
-  { id: 'font', name: '字体', icon: <Text theme="outline" size="16" /> },
+  { id: 'editor', name: '编辑器', icon: <Format theme="outline" size="16" /> },
+  { id: 'font', name: '字体', icon: <FontSize theme="outline" size="16" /> },
   { id: 'theme', name: '主题', icon: <Theme theme="outline" size="16" /> },
   { id: 'about', name: '关于', icon: <Info theme="outline" size="16" /> },
 ]
@@ -99,7 +99,6 @@ export default function SettingsPanel({ settings, theme, onChange, onClose }: Se
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-card settings-card">
-        <button className="modal-close" onClick={onClose} title="关闭"><Close theme="outline" size="16" /></button>
         <nav className="settings-nav">
           {NAV.map((n) => (
             <button key={n.id} className={`settings-nav-item${nav === n.id ? ' active' : ''}`} onClick={() => setNav(n.id)}>
@@ -108,7 +107,13 @@ export default function SettingsPanel({ settings, theme, onChange, onClose }: Se
           ))}
         </nav>
 
-        <div className="settings-detail">
+        <div className="settings-main">
+          <div className="settings-head">
+            <span className="settings-title">{NAV.find((n) => n.id === nav)?.name}</span>
+            <button className="head-close" onClick={onClose} title="关闭"><Close theme="outline" size="16" /></button>
+          </div>
+
+          <div className="settings-detail">
           {nav === 'editor' && (
             <>
               <Slider label="字体大小" value={settings.fontSize} min={14} max={22} step={1} unit=" px" onChange={(v) => onChange({ fontSize: v })} />
@@ -231,6 +236,7 @@ export default function SettingsPanel({ settings, theme, onChange, onClose }: Se
               <p className="about-footer">Powered by Noctipastor</p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

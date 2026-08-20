@@ -4,18 +4,22 @@ import type { CSSProperties } from 'react'
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react'
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, editorViewOptionsCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
-import { gfm } from '@milkdown/preset-gfm'
+import { gfm, columnResizingPlugin } from '@milkdown/preset-gfm'
 import { history } from '@milkdown/plugin-history'
 import { clipboard } from '@milkdown/plugin-clipboard'
 import { cursor } from '@milkdown/plugin-cursor'
 import { indent } from '@milkdown/plugin-indent'
-import { emoji } from '@milkdown/plugin-emoji'
+import { remarkEmojiPlugin } from '@milkdown/plugin-emoji'
 import { highlight, highlightPluginConfig } from '@milkdown/plugin-highlight'
 import { automd } from '@milkdown/plugin-automd'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { upload, uploadConfig } from '@milkdown/plugin-upload'
 import { createParser } from 'prosemirror-highlight/sugar-high'
-import { $mark } from '@milkdown/utils'
+import { $inputRule, $mark } from '@milkdown/utils'
+import { InputRule } from '@milkdown/prose/inputrules'
+import { cellAround } from '@milkdown/prose/tables'
+import { get as getEmoji } from 'node-emoji'
+import type { Ctx } from '@milkdown/ctx'
 import type { Mark, MarkType } from '@milkdown/prose/model'
 import type { Node as ProseNode } from '@milkdown/prose/model'
 import type { EditorView } from '@milkdown/prose/view'
@@ -47,23 +51,61 @@ export interface EditorApi {
   hasFocus: () => boolean
 }
 
+// 光标所在表格状态（供格式栏的表格工具条使用）
+export interface TableState {
+  inTable: boolean
+  align: 'left' | 'center' | 'right'
+}
+
+export const TABLE_STATE_OFF: TableState = { inTable: false, align: 'left' }
+
+// 原生 emoji：`:smile:` 输入后直接替换为 Unicode 字符。
+// 不使用官方 emoji 组合包——其内置的 twemoji 插件会把 emoji 转成 CDN 图片，
+// 导致字号失控、光标错乱与排版异常；这里仅复用其 remark 插件做语法解析。
+const nativeEmojiInputRule = $inputRule(
+  () =>
+    new InputRule(/(:([^:\s]+):)$/, (state, match, start, end) => {
+      const shortcode = match[0]
+      if (!shortcode) return null
+      const char = getEmoji(shortcode)
+      if (!char || shortcode.includes(char)) return null
+      return state.tr.insertText(char, start, end)
+    })
+)
+
 interface EditorAreaProps {
   initialMarkdown: string
   settings: EditorSettings
   theme: ThemeTokens
   onMarkdownChange: (markdown: string) => void
   onDocChange: (doc: ProseNode) => void
+  onTableState: (state: TableState) => void
   apiRef: { current: EditorApi | null }
 }
 
 function EditorAreaInner(props: EditorAreaProps) {
-  const { initialMarkdown, settings, theme, onMarkdownChange, onDocChange, apiRef } = props
+  const { initialMarkdown, settings, theme, onMarkdownChange, onDocChange, onTableState, apiRef } = props
   const scrollRef = useRef<HTMLDivElement>(null)
-  const changeRef = useRef({ onMarkdownChange, onDocChange, typewriter: settings.typewriter })
+  const changeRef = useRef({ onMarkdownChange, onDocChange, onTableState, typewriter: settings.typewriter })
 
   useEffect(() => {
-    changeRef.current = { onMarkdownChange, onDocChange, typewriter: settings.typewriter }
-  }, [onMarkdownChange, onDocChange, settings.typewriter])
+    changeRef.current = { onMarkdownChange, onDocChange, onTableState, typewriter: settings.typewriter }
+  }, [onMarkdownChange, onDocChange, onTableState, settings.typewriter])
+
+  // 上报光标所在表格状态（未变化时由 App 侧短路，避免每次按键重渲染）
+  const pushTableState = (ctx: Ctx) => {
+    try {
+      const { state } = ctx.get(editorViewCtx)
+      const cell = cellAround(state.selection.$head)
+      if (!cell) {
+        changeRef.current.onTableState(TABLE_STATE_OFF)
+        return
+      }
+      const align = state.doc.nodeAt(cell.pos)?.attrs.alignment
+      const norm = align === 'center' || align === 'right' ? align : 'left'
+      changeRef.current.onTableState({ inTable: true, align: norm })
+    } catch { /* 编辑器未就绪时忽略 */ }
+  }
 
   const keepCursorCentered = (view: EditorView) => {
     const container = scrollRef.current
@@ -109,8 +151,10 @@ function EditorAreaInner(props: EditorAreaProps) {
         })
         ctx.get(listenerCtx)
           .markdownUpdated((_, markdown) => changeRef.current.onMarkdownChange(markdown))
+          .selectionUpdated((ctx) => pushTableState(ctx))
           .updated((ctx, doc) => {
             changeRef.current.onDocChange(doc)
+            pushTableState(ctx)
             if (changeRef.current.typewriter) {
               const view = ctx.get(editorViewCtx)
               keepCursorCentered(view)
@@ -121,11 +165,13 @@ function EditorAreaInner(props: EditorAreaProps) {
       .use(listener)
       .use(commonmark)
       .use(gfm)
+      .use(columnResizingPlugin)
       .use(history)
       .use(clipboard)
       .use(cursor)
       .use(indent)
-      .use(emoji)
+      .use(remarkEmojiPlugin)
+      .use(nativeEmojiInputRule)
       .use(highlight)
       .use(automd)
       .use(upload)
