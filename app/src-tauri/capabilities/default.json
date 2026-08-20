@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Miaomoo Lite 预览版默认能力：仅核心权限，无文件系统/网络插件",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
