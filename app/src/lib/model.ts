@@ -23,8 +23,8 @@ export function saveNote(note: Note) {
   try { localStorage.setItem(NOTE_KEY, JSON.stringify(note)) } catch { /* 存储失败静默 */ }
 }
 
-// 存量设置迁移：v2 起打字机模式默认启用
-const SETTINGS_VERSION = 2
+// 存量设置迁移：v2 起打字机模式默认启用；v3 新增通用设置项；v4 新增快捷键表
+const SETTINGS_VERSION = 4
 
 export function loadSettings(): EditorSettings {
   try {

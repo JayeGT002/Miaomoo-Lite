@@ -80,10 +80,11 @@ export function mdToTypst(blocks: Block[], title: string, paper: string, toc: bo
         out.push(`  columns: (${'auto, '.repeat(cols).trimEnd().replace(/,$/, '')}),`)
         out.push(`  inset: 6pt,`)
         out.push(`  align: left + horizon,`)
-        out.push(`  table.header(${b.header.map((c) => `[*${runsToTypst(c)}*]`).join(', ')}),`)
+        out.push(`  table.header(${b.header.map((c) => `[*${runsToTypst(c) || '~'}*]`).join(', ')}),`)
         b.rows.forEach((r) => {
           const cells: string[] = []
-          for (let i = 0; i < cols; i++) cells.push(`[${runsToTypst(r[i] ?? [])}]`)
+          // 空单元格用 ~（不断行空格）占位，保证占据一行行高
+          for (let i = 0; i < cols; i++) cells.push(`[${runsToTypst(r[i] ?? []) || '~'}]`)
           out.push(`  ${cells.join(', ')},`)
         })
         out.push(`)`)

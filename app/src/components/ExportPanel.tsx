@@ -260,7 +260,7 @@ export default function ExportPanel({ title, markdown, theme, getPayload, onClos
           <div className="export-foot">
             <button className="ghost-btn" onClick={onClose}>取消</button>
             <button className="primary-btn" disabled={busy} onClick={() => void doExport()}>
-              {busy ? '导出中…' : `导出 ${filename || '无标题'}${fmt.ext}`}
+              {busy ? '导出中…' : `导出${fmt.ext}`}
             </button>
           </div>
         </div>

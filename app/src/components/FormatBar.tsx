@@ -29,7 +29,7 @@ interface FormatBarProps {
   tableState: TableState
 }
 
-type MenuId = 'heading' | 'list' | 'code' | 'image' | 'link' | 'row' | 'col' | null
+type MenuId = 'heading' | 'list' | 'code' | 'link' | null
 
 const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   const r = new FileReader()
@@ -38,10 +38,59 @@ const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   r.readAsDataURL(file)
 })
 
+// 行列操作图标（iconparkstyle-bykimi 提供的 SVG，描边跟随 currentColor）
+const svgProps = {
+  width: 16,
+  height: 16,
+  viewBox: '0 0 48 48',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 4,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+}
+const InsertRowTop = () => (
+  <svg {...svgProps}>
+    <path d="M5 14H15" /><path d="M10 9V19" />
+    <path d="M19 8H42V20H19V8Z" /><path d="M6 28H42V40H6V28Z" />
+  </svg>
+)
+const InsertRowBottom = () => (
+  <svg {...svgProps}>
+    <path d="M5 34H15" /><path d="M10 29V39" />
+    <path d="M19 28H42V40H19V28Z" /><path d="M6 8H42V20H6V8Z" />
+  </svg>
+)
+const InsertColumnLeft = () => (
+  <svg {...svgProps}>
+    <path d="M14 33V43" /><path d="M9 38H19" />
+    <path d="M8 6H20V29H8V6Z" /><path d="M28 6H40V42H28V6Z" />
+  </svg>
+)
+const InsertColumnRight = () => (
+  <svg {...svgProps}>
+    <path d="M34 33V43" /><path d="M29 38H39" />
+    <path d="M28 6H40V29H28V6Z" /><path d="M8 6H20V42H8V20Z" />
+  </svg>
+)
+// 删除行/列：与插入图标同款网格，加号换成减号，视觉成对
+const DeleteRow = () => (
+  <svg {...svgProps}>
+    <path d="M5 14H15" />
+    <path d="M19 8H42V20H19V8Z" /><path d="M6 28H42V40H6V28Z" />
+  </svg>
+)
+const DeleteColumn = () => (
+  <svg {...svgProps}>
+    <path d="M9 38H19" />
+    <path d="M8 6H20V29H8V6Z" /><path d="M28 6H40V42H28V6Z" />
+  </svg>
+)
+
 export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
   const [menu, setMenu] = useState<MenuId>(null)
   const [linkUrl, setLinkUrl] = useState('')
-  const [imageUrl, setImageUrl] = useState('')
+  const [linkTitle, setLinkTitle] = useState('')
   const barRef = useRef<HTMLDivElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
   const attachFileRef = useRef<HTMLInputElement>(null)
@@ -49,7 +98,9 @@ export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
   useEffect(() => {
     if (!menu) return
     const onDown = (e: MouseEvent) => {
-      if (!barRef.current?.contains(e.target as Node)) setMenu(null)
+      const t = e.target
+      if (t instanceof Element && t.closest('.format-bar-wrap, .table-tools-float')) return
+      setMenu(null)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
@@ -91,7 +142,7 @@ export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
     view.focus()
   }
 
-  // 表格行/列删除：先按当前坐标选中行/列（或整表），再执行删除
+  // 删除行/列/整表：先按当前坐标选中对应部分，再执行删除
   const deleteTablePart = (kind: 'row' | 'col' | 'table') => {
     const api = apiRef.current
     const editor = api?.getEditor()
@@ -111,6 +162,15 @@ export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
     } catch { /* 预览版容错 */ }
     setTimeout(() => view.focus(), 0)
     setMenu(null)
+  }
+
+  // 应用链接：地址必填，标题可选（写入 link mark 的 title 属性）
+  const applyLink = () => {
+    const href = linkUrl.trim()
+    if (!href) return
+    run(({ command, focus }) => { command(toggleLinkCommand.key, { href, title: linkTitle.trim() }); focus() })
+    setLinkUrl('')
+    setLinkTitle('')
   }
 
   const menuBtn = (id: Exclude<MenuId, null>, label: string) => ({
@@ -135,49 +195,54 @@ export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
     </button>
   )
 
+  // 表格工具条定位：悬浮在表格上方左缘，空间不足时贴在表格内部顶端
+  const tableRect = tableState.rect
+  const tableToolStyle = tableRect
+    ? {
+        top: Math.max(tableRect.top - 46, 60),
+        left: Math.max(tableRect.left, 8),
+      }
+    : undefined
+
   return (
-    <div className="format-bar-wrap" ref={barRef}>
-      {/* 表格工具条：光标位于表格内时显示在格式栏上方 */}
-      {tableState.inTable && (
-        <div className="table-tools">
+    <>
+      {/* 表格工具条：跟随表格浮动，光标位于表格内时显示 */}
+      {tableState.inTable && tableToolStyle && (
+        <div className="table-tools-float" style={tableToolStyle}>
           <AlignBtn align="left" label="左对齐" icon={<AlignTextLeft theme="outline" size="16" />} />
           <AlignBtn align="center" label="居中对齐" icon={<AlignTextCenter theme="outline" size="16" />} />
           <AlignBtn align="right" label="右对齐" icon={<AlignTextRight theme="outline" size="16" />} />
           <span className="fmt-sep" />
 
-          <div className="fmt-group">
-            <button {...menuBtn('row', '行操作')}>
-              <span className="fmt-text">行</span>
-            </button>
-            {menu === 'row' && (
-              <div className="fmt-menu">
-                <MenuItem icon={<span className="fmt-text">↑</span>} label="在上方插入行" onClick={() => run(({ command, focus }) => { command(addRowBeforeCommand.key); focus() })} />
-                <MenuItem icon={<span className="fmt-text">↓</span>} label="在下方插入行" onClick={() => run(({ command, focus }) => { command(addRowAfterCommand.key); focus() })} />
-                <MenuItem icon={<span className="fmt-text">✕</span>} label="删除此行" onClick={() => deleteTablePart('row')} />
-              </div>
-            )}
-          </div>
-
-          <div className="fmt-group">
-            <button {...menuBtn('col', '列操作')}>
-              <span className="fmt-text">列</span>
-            </button>
-            {menu === 'col' && (
-              <div className="fmt-menu">
-                <MenuItem icon={<span className="fmt-text">←</span>} label="在左侧插入列" onClick={() => run(({ command, focus }) => { command(addColBeforeCommand.key); focus() })} />
-                <MenuItem icon={<span className="fmt-text">→</span>} label="在右侧插入列" onClick={() => run(({ command, focus }) => { command(addColAfterCommand.key); focus() })} />
-                <MenuItem icon={<span className="fmt-text">✕</span>} label="删除此列" onClick={() => deleteTablePart('col')} />
-              </div>
-            )}
-          </div>
+          {/* 行列操作：四个插入功能直接平铺，不做二级菜单 */}
+          <button className="fmt-btn" title="在上方插入行" onClick={() => run(({ command, focus }) => { command(addRowBeforeCommand.key); focus() })}>
+            <InsertRowTop />
+          </button>
+          <button className="fmt-btn" title="在下方插入行" onClick={() => run(({ command, focus }) => { command(addRowAfterCommand.key); focus() })}>
+            <InsertRowBottom />
+          </button>
+          <button className="fmt-btn" title="在左侧插入列" onClick={() => run(({ command, focus }) => { command(addColBeforeCommand.key); focus() })}>
+            <InsertColumnLeft />
+          </button>
+          <button className="fmt-btn" title="在右侧插入列" onClick={() => run(({ command, focus }) => { command(addColAfterCommand.key); focus() })}>
+            <InsertColumnRight />
+          </button>
 
           <span className="fmt-sep" />
+
+          <button className="fmt-btn" title="删除此行" onClick={() => deleteTablePart('row')}>
+            <DeleteRow />
+          </button>
+          <button className="fmt-btn" title="删除此列" onClick={() => deleteTablePart('col')}>
+            <DeleteColumn />
+          </button>
           <button className="fmt-btn" title="删除表格" onClick={() => deleteTablePart('table')}>
             <DeleteOne theme="outline" size="16" />
           </button>
         </div>
       )}
 
+      <div className="format-bar-wrap" ref={barRef}>
       <div className="format-bar">
         {/* 标题 */}
         <div className="fmt-group">
@@ -225,48 +290,17 @@ export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
           )}
         </div>
 
-        {/* 图片 */}
-        <div className="fmt-group">
-          <button {...menuBtn('image', '插入图片')}>
-            <Pic theme="outline" size="17" />
-          </button>
-          {menu === 'image' && (
-            <div className="fmt-menu wide">
-              <MenuItem icon={<Pic />} label="选择本地图片…" onClick={() => imageFileRef.current?.click()} />
-              <div className="menu-input-row">
-                <input
-                  autoFocus
-                  placeholder="或输入图片链接…"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && imageUrl.trim()) {
-                      run(({ command, focus }) => { command(insertImageCommand.key, { src: imageUrl.trim(), alt: '' }); focus() })
-                      setImageUrl('')
-                    }
-                  }}
-                />
-                <button
-                  className="menu-confirm"
-                  onClick={() => {
-                    if (!imageUrl.trim()) return
-                    run(({ command, focus }) => { command(insertImageCommand.key, { src: imageUrl.trim(), alt: '' }); focus() })
-                    setImageUrl('')
-                  }}
-                >
-                  插入
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* 图片：点击直接选择本地文件（暂不支持远程图片链接） */}
+        <button className="fmt-btn" title="插入本地图片" onClick={() => imageFileRef.current?.click()}>
+          <Pic theme="outline" size="17" />
+        </button>
         <input ref={imageFileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { void insertImageFiles(e.target.files); e.target.value = '' }} />
 
         {/* 附件 */}
         <button className="fmt-btn" title="插入附件" onClick={() => attachFileRef.current?.click()}><Paperclip theme="outline" size="17" /></button>
         <input ref={attachFileRef} type="file" multiple hidden onChange={(e) => { void insertAttachments(e.target.files); e.target.value = '' }} />
 
-        {/* 链接 */}
+        {/* 链接：地址 + 可选标题 */}
         <div className="fmt-group">
           <button {...menuBtn('link', '插入/编辑链接')}>
             <LinkOne theme="outline" size="17" />
@@ -276,26 +310,22 @@ export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
               <div className="menu-input-row">
                 <input
                   autoFocus
-                  placeholder="输入链接地址…"
+                  placeholder="链接地址…"
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && linkUrl.trim()) {
-                      run(({ command, focus }) => { command(toggleLinkCommand.key, { href: linkUrl.trim() }); focus() })
-                      setLinkUrl('')
-                    }
-                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') applyLink() }}
                 />
-                <button
-                  className="menu-confirm"
-                  onClick={() => {
-                    if (!linkUrl.trim()) return
-                    run(({ command, focus }) => { command(toggleLinkCommand.key, { href: linkUrl.trim() }); focus() })
-                    setLinkUrl('')
-                  }}
-                >
-                  应用
-                </button>
+              </div>
+              <div className="menu-input-row">
+                <input
+                  placeholder="标题（可选）…"
+                  value={linkTitle}
+                  onChange={(e) => setLinkTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') applyLink() }}
+                />
+              </div>
+              <div className="menu-actions">
+                <button className="menu-confirm" onClick={applyLink}>应用</button>
               </div>
             </div>
           )}
@@ -322,6 +352,7 @@ export default function FormatBar({ apiRef, tableState }: FormatBarProps) {
         {/* 分割线 */}
         <button className="fmt-btn" title="插入分割线" onClick={() => run(({ command, focus }) => { command(insertHrCommand.key); focus() })}><DividingLineOne theme="outline" size="17" /></button>
       </div>
-    </div>
+      </div>
+    </>
   )
 }

@@ -61,7 +61,7 @@ export default function DetailsPanel({ stats, outline, createdAt, updatedAt, onJ
           ))}
         </div>
       ) : (
-        <div className="details-body outline">
+        <div className="details-body">
           {outline.length === 0 ? (
             <p className="outline-empty">暂无标题<br />输入「# 」开始创建一级标题</p>
           ) : (

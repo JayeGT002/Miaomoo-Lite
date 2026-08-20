@@ -32,6 +32,14 @@ export async function pickSavePath(defaultName: string, ext: string): Promise<st
   })
 }
 
+/** 桌面端：原生目录选择对话框；Web 版返回 null */
+export async function pickDirectory(): Promise<string | null> {
+  if (!isDesktop()) return null
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const picked = await open({ directory: true, multiple: false })
+  return typeof picked === 'string' ? picked : null
+}
+
 /** 桌面端：写文件到指定路径（Rust 命令） */
 export async function saveFileRaw(path: string, data: Uint8Array | string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core')

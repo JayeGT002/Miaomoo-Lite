@@ -135,7 +135,7 @@ const runText = (runs: InlineRun[]) => runs.map((r) => r.text).join('')
 
 // ── 通用下载 ──
 
-function downloadBlob(filename: string, blob: Blob) {
+export function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -214,9 +214,10 @@ function toHtmlBody(blocks: Block[], toc: Block[] | null, withIds: boolean): str
       }
       case 'table':
         out.push('<table><thead><tr>')
-        b.header.forEach((c) => out.push(`<th>${runsToHtml(c)}</th>`))
+        // 空单元格补 &nbsp; 占位：整行皆空时行高不会塌陷成一条细缝
+        b.header.forEach((c) => out.push(`<th>${runsToHtml(c) || '&nbsp;'}</th>`))
         out.push('</tr></thead><tbody>')
-        b.rows.forEach((r) => { out.push('<tr>'); r.forEach((c) => out.push(`<td>${runsToHtml(c)}</td>`)); out.push('</tr>') })
+        b.rows.forEach((r) => { out.push('<tr>'); r.forEach((c) => out.push(`<td>${runsToHtml(c) || '&nbsp;'}</td>`)); out.push('</tr>') })
         out.push('</tbody></table>')
         break
     }
@@ -537,13 +538,24 @@ export async function runExport(opts: ExportOptions, payload: ExportPayload): Pr
     case 'png': {
       const el = payload.getContentEl()
       if (!el) throw new Error('未找到编辑内容区域')
+      // 画布宽度跟随行宽设置：把外层容器临时收窄到正文列宽，同时裁掉打字机模式的底部留白
+      const prose = el.querySelector<HTMLElement>('.miaomoo-prose')
+      const savedWidth = el.style.width
+      const savedPadBottom = prose?.style.paddingBottom ?? ''
+      if (prose) {
+        el.style.width = `${prose.offsetWidth}px`
+        prose.style.paddingBottom = '44px'
+      }
       const restore = await inlineCrossOriginImages(el)
       try {
-        // html2canvas-pro 直接 DOM→canvas，支持 color()/oklch() 等现代颜色函数
+        // 非透明导出时：元素背景为全透明色（rgba alpha=0）需回退白色，
+        // 否则 computed 值 "rgba(0, 0, 0, 0)" 恒为真值，会把不透明选项也导成透明图
+        const bg = getComputedStyle(el).backgroundColor
+        const bgBlank = !bg || bg === 'transparent' || /^rgba\([^)]*,\s*0\s*\)$/.test(bg.trim())
         const canvas = await withTimeout(
           html2canvas(el, {
             scale: opts.pngScale,
-            backgroundColor: opts.pngTransparent ? null : getComputedStyle(el).backgroundColor || '#ffffff',
+            backgroundColor: opts.pngTransparent ? null : (bgBlank ? '#ffffff' : bg),
             useCORS: true,
           }),
           30_000,
@@ -557,6 +569,8 @@ export async function runExport(opts: ExportOptions, payload: ExportPayload): Pr
         return true
       } finally {
         restore()
+        el.style.width = savedWidth
+        if (prose) prose.style.paddingBottom = savedPadBottom
       }
     }
     case 'pdf': {

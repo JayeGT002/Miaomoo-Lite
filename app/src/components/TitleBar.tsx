@@ -1,5 +1,5 @@
-// 标题栏：标题 / 保存状态 / 详情 / 导出 / 设置
-import { CheckOne, Loading, Info, Export, Setting } from '@icon-park/react'
+// 标题栏：标题 / 保存状态 / 详情 / 导入 / 导出 / 设置
+import { CheckOne, Loading, Info, FileAdditionOne, ShareThree, Setting } from '@icon-park/react'
 import type { ThemeTokens } from '../data'
 
 interface TitleBarProps {
@@ -7,12 +7,13 @@ interface TitleBarProps {
   saving: boolean
   showDetails: boolean
   onToggleDetails: () => void
+  onImport: () => void
   onOpenExport: () => void
   onOpenSettings: () => void
   theme: ThemeTokens
 }
 
-export default function TitleBar({ title, saving, showDetails, onToggleDetails, onOpenExport, onOpenSettings, theme }: TitleBarProps) {
+export default function TitleBar({ title, saving, showDetails, onToggleDetails, onImport, onOpenExport, onOpenSettings, theme }: TitleBarProps) {
   return (
     <header className="title-bar">
       <h1 className="title-text" title={title}>{title}</h1>
@@ -31,8 +32,11 @@ export default function TitleBar({ title, saving, showDetails, onToggleDetails, 
         >
           <Info theme="outline" size="17" />
         </button>
+        <button className="icon-btn" title="导入 .md / .txt" onClick={onImport}>
+          <FileAdditionOne theme="outline" size="17" />
+        </button>
         <button className="icon-btn" title="导出" onClick={onOpenExport}>
-          <Export theme="outline" size="17" />
+          <ShareThree theme="outline" size="17" />
         </button>
         <button className="icon-btn" title="设置" onClick={onOpenSettings}>
           <Setting theme="outline" size="17" />

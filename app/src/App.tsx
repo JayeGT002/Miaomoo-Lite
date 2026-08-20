@@ -38,6 +38,7 @@ export default function App() {
   const speedWindow = useRef<{ t: number; chars: number }[]>([])
   const lastLen = useRef(-1)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
+  const importFileRef = useRef<HTMLInputElement>(null)
 
   const theme = useMemo(() => getTheme(settings.themeId), [settings.themeId])
 
@@ -59,6 +60,8 @@ export default function App() {
 
   const onMarkdownChange = (markdown: string) => {
     markdownRef.current = markdown
+    // 自动保存关闭时不落盘（内容仍在编辑器内，可随时重新开启）
+    if (!settings.autoSave) return
     setSaving(true)
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
@@ -83,9 +86,13 @@ export default function App() {
     setStats(computeStats(markdownRef.current, speedWindow.current))
   }
 
-  // 表格状态变化时才更新（避免每次按键触发重渲染）
+  // 表格状态变化时才更新（含矩形变化，滚动时工具条跟随；避免无关按键重渲染）
   const onTableState = (s: TableState) => {
-    setTableState((prev) => (prev.inTable === s.inTable && prev.align === s.align ? prev : s))
+    setTableState((prev) => (
+      prev.inTable === s.inTable && prev.align === s.align
+      && prev.rect?.top === s.rect?.top && prev.rect?.left === s.rect?.left && prev.rect?.width === s.rect?.width
+        ? prev : s
+    ))
   }
 
   const jumpToHeading = (pos: number) => {
@@ -93,9 +100,26 @@ export default function App() {
     if (!view) return
     try {
       const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos + 1)))
-      view.dispatch(tr.scrollIntoView())
+      view.dispatch(tr)
       view.focus()
+      // 目标行滚动到编辑区中央（打字机式定位）
+      apiRef.current?.centerAtPos(pos)
     } catch { /* 位置失效忽略 */ }
+  }
+
+  // 导入 .md / .txt：整体替换当前文档（内容经监听器自动保存并刷新标题/统计）
+  const importFile = async (file: File | null) => {
+    if (importFileRef.current) importFileRef.current.value = ''
+    if (!file) return
+    const name = file.name.toLowerCase()
+    const accepted = name.endsWith('.md') || name.endsWith('.txt') || file.type === 'text/markdown' || file.type === 'text/plain'
+    if (!accepted) {
+      notify('仅支持导入 .md 与 .txt 文件')
+      return
+    }
+    const text = await file.text()
+    const ok = apiRef.current?.setContent(text) ?? false
+    notify(ok ? `已导入 ${file.name}` : '导入失败，请重试')
   }
 
   const exportPayload = () => ({
@@ -121,16 +145,27 @@ export default function App() {
   } as CSSProperties
 
   return (
-    <div className={`app-shell${theme.tokens.dark ? ' dark' : ''}`} style={rootStyle}>
+    <div
+      className={`app-shell${theme.tokens.dark ? ' dark' : ''}`}
+      style={{ ...rootStyle, zoom: settings.uiScale / 100 }}
+    >
       <Notify notices={notices} />
       <TitleBar
         title={title}
         saving={saving}
         showDetails={showDetails}
         onToggleDetails={() => setShowDetails((v) => !v)}
+        onImport={() => importFileRef.current?.click()}
         onOpenExport={() => setShowExport(true)}
         onOpenSettings={() => setShowSettings(true)}
         theme={theme.tokens}
+      />
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".md,.txt,text/markdown,text/plain"
+        className="hidden-input"
+        onChange={(e) => void importFile(e.target.files?.[0] ?? null)}
       />
       <main className="app-main">
         <div className="editor-pane">
@@ -172,6 +207,7 @@ export default function App() {
           theme={theme.tokens}
           onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
           onClose={() => setShowSettings(false)}
+          notify={notify}
         />
       )}
     </div>

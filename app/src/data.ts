@@ -142,6 +142,71 @@ export function codeFontStack(settings: EditorSettings): string {
   return CODE_FONTS.find((f) => f.id === settings.codeFontId)?.stack ?? CODE_FONTS[0].stack
 }
 
+// ── 快捷键 ──
+
+/** 可自定义快捷键的格式操作（默认绑定与格式栏提示一致） */
+export interface ShortcutAction {
+  id: string
+  name: string
+  defaultKeys: string // 形如 'Mod+B'；Mod 在 macOS 为 ⌘，其余为 Ctrl
+}
+
+export const SHORTCUT_ACTIONS: ShortcutAction[] = [
+  { id: 'bold', name: '加粗', defaultKeys: 'Mod+B' },
+  { id: 'italic', name: '斜体', defaultKeys: 'Mod+I' },
+  { id: 'underline', name: '下划线', defaultKeys: 'Mod+U' },
+  { id: 'strikethrough', name: '删除线', defaultKeys: '' },
+  { id: 'inlineCode', name: '行内代码', defaultKeys: 'Mod+E' },
+  { id: 'codeBlock', name: '代码块', defaultKeys: '' },
+  { id: 'h1', name: '一级标题', defaultKeys: 'Mod+1' },
+  { id: 'h2', name: '二级标题', defaultKeys: 'Mod+2' },
+  { id: 'h3', name: '三级标题', defaultKeys: 'Mod+3' },
+  { id: 'h4', name: '四级标题', defaultKeys: 'Mod+4' },
+  { id: 'h5', name: '五级标题', defaultKeys: 'Mod+5' },
+  { id: 'bulletList', name: '无序列表', defaultKeys: 'Mod+Shift+8' },
+  { id: 'orderedList', name: '有序列表', defaultKeys: 'Mod+Shift+7' },
+  { id: 'table', name: '插入表格', defaultKeys: '' },
+  { id: 'hr', name: '分割线', defaultKeys: '' },
+]
+
+export const DEFAULT_SHORTCUTS: Record<string, string> = Object.fromEntries(
+  SHORTCUT_ACTIONS.map((a) => [a.id, a.defaultKeys]),
+)
+
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+
+/** 键盘事件 → 绑定串（'Mod+Shift+8'）；纯修饰键或无修饰键返回 null（不吞正文输入） */
+export function bindingFromEvent(e: {
+  metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; key: string; code: string
+}): string | null {
+  if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return null
+  const mod = IS_MAC ? e.metaKey : e.ctrlKey
+  if (!mod && !e.altKey && !e.shiftKey) return null
+  // Shift+数字在多数布局下 e.key 是符号（如 *），用 e.code 回推数字键
+  const digit = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)
+  const key = digit ? digit[1] : e.key.length === 1 ? e.key.toUpperCase() : e.key
+  return [mod ? 'Mod' : '', e.altKey ? 'Alt' : '', e.shiftKey ? 'Shift' : '', key].filter(Boolean).join('+')
+}
+
+/** 两个绑定串是否等价（忽略修饰键书写顺序） */
+export function sameBinding(a: string, b: string): boolean {
+  if (!a || !b) return false
+  const parse = (s: string) => {
+    const parts = s.split('+').map((p) => p.trim()).filter(Boolean)
+    const key = (parts.pop() ?? '').toUpperCase()
+    const has = (n: string) => parts.some((p) => p.toLowerCase() === n)
+    return `${has('mod')}|${has('alt')}|${has('shift')}|${key}`
+  }
+  return parse(a) === parse(b)
+}
+
+/** 绑定串 → 显示形式（macOS：⌘⇧8；其他：Ctrl+Shift+8） */
+export function formatBinding(b: string): string {
+  if (!b) return '未设置'
+  const map = (p: string) => (p === 'Mod' ? (IS_MAC ? '⌘' : 'Ctrl') : p === 'Alt' ? (IS_MAC ? '⌥' : 'Alt') : p === 'Shift' ? (IS_MAC ? '⇧' : 'Shift') : p)
+  return b.split('+').map(map).join(IS_MAC ? '' : '+')
+}
+
 // ── 设置模型 ──
 
 export interface EditorSettings {
@@ -155,7 +220,17 @@ export interface EditorSettings {
   paragraphSpacing: number // 0.3–1.6 em
   paragraphIndent: 'none' | '2char'
   typewriter: boolean
+  typewriterLine: number // 打字机模式固定行位置（视口高度百分比 50–80）
   themeId: string
+  // ── 通用 ──
+  language: string // i18n 预留，当前仅 zh-CN
+  autoSave: boolean // 自动保存
+  uiScale: number // 全局元素缩放（百分比 80–120）
+  // ── 桌面端专属（其他平台忽略但随配置保存，便于多端同步） ──
+  imageSaveDir: string // 全局图片保存目录
+  backupDir: string // 全局文档备份目录
+  // ── 快捷键 ──
+  shortcuts: Record<string, string> // 操作 id → 绑定串（'Mod+Shift+K'）
 }
 
 export const DEFAULT_SETTINGS: EditorSettings = {
@@ -169,7 +244,14 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   paragraphSpacing: 0.9,
   paragraphIndent: 'none',
   typewriter: true,
+  typewriterLine: 50,
   themeId: DEFAULT_THEME_ID,
+  language: 'zh-CN',
+  autoSave: true,
+  uiScale: 100,
+  imageSaveDir: '',
+  backupDir: '',
+  shortcuts: { ...DEFAULT_SHORTCUTS },
 }
 
 // ── 笔记模型 ──
