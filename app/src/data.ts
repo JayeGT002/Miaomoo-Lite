@@ -168,7 +168,7 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   lineWidth: 720,
   paragraphSpacing: 0.8,
   paragraphIndent: 'none',
-  typewriter: false,
+  typewriter: true,
   themeId: DEFAULT_THEME_ID,
 }
 

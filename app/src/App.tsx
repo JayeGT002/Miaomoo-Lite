@@ -162,6 +162,7 @@ export default function App() {
       {showSettings && (
         <SettingsPanel
           settings={settings}
+          theme={theme.tokens}
           onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
           onClose={() => setShowSettings(false)}
         />

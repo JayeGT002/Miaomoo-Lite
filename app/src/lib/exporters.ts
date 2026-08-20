@@ -1,9 +1,9 @@
 // 导出能力：8 种格式，轻量实现（禁止大型渲染引擎）
-// PNG=html-to-image / 桌面 PDF=Typst sidecar、Web PDF=window.print / HTML·TXT=字符串
+// PNG=html2canvas-pro（支持 color()/oklch() 等现代颜色函数）/ 桌面 PDF=Typst sidecar、Web PDF=window.print / HTML·TXT=字符串
 // DOCX·RTF=自写模板 / EPUB·TextBundle=fflate 打包
 // 桌面端经 platform.ts 走原生保存对话框 + Rust 写文件；Web 版走浏览器下载
 import type { Node as ProseNode } from '@milkdown/prose/model'
-import { toPng } from 'html-to-image'
+import html2canvas from 'html2canvas-pro'
 import { strToU8, zipSync } from 'fflate'
 import { isDesktop, pickSavePath, saveFileRaw, saveTextBundleRaw, typstCompileRaw, type BundleFile } from './platform'
 import { mdToTypst } from './typst'
@@ -436,6 +436,45 @@ function printPdf(size: 'A4' | 'A5' | 'Letter') {
   setTimeout(() => { if (document.documentElement.classList.contains('print-export')) cleanup() }, 60_000)
 }
 
+// ── PNG 辅助：把跨域图片（twemoji 等）预先转成 dataURL，避免 canvas 跨域污染 ──
+
+async function inlineCrossOriginImages(el: HTMLElement): Promise<() => void> {
+  const imgs = Array.from(el.querySelectorAll('img')).filter((img) => img.src && !img.src.startsWith('data:'))
+  const restores: (() => void)[] = []
+  await Promise.all(imgs.map(async (img) => {
+    const original = img.getAttribute('src')
+    if (!original) return
+    try {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 8000)
+      const blob = await (await fetch(original, { signal: ctrl.signal })).blob()
+      clearTimeout(timer)
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader()
+        fr.onload = () => resolve(String(fr.result))
+        fr.onerror = () => reject(fr.error)
+        fr.readAsDataURL(blob)
+      })
+      img.src = dataUrl
+      restores.push(() => { img.setAttribute('src', original) })
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[png-inline] fail', original, e)
+      // 转换失败的图换成透明占位，避免 toPng 内部加载外链失败 reject(Event)
+      img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+      restores.push(() => { img.setAttribute('src', original) })
+    }
+  }))
+  return () => restores.forEach((r) => r())
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    p.then((v) => { clearTimeout(timer); resolve(v) }, (e) => { clearTimeout(timer); reject(e) })
+  })
+}
+
 // ── 入口 ──
 
 /** 桌面端：原生保存对话框 + Rust 写文件；返回 false 表示用户取消 */
@@ -498,11 +537,27 @@ export async function runExport(opts: ExportOptions, payload: ExportPayload): Pr
     case 'png': {
       const el = payload.getContentEl()
       if (!el) throw new Error('未找到编辑内容区域')
-      const dataUrl = await toPng(el, { pixelRatio: opts.pngScale, ...(opts.pngTransparent ? {} : { backgroundColor: getComputedStyle(el).backgroundColor || '#ffffff' }) })
-      const bytes = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer())
-      if (desktop) return exportViaDialog(`${base}.png`, '.png', bytes)
-      downloadBytes(`${base}.png`, bytes, 'image/png')
-      return true
+      const restore = await inlineCrossOriginImages(el)
+      try {
+        // html2canvas-pro 直接 DOM→canvas，支持 color()/oklch() 等现代颜色函数
+        const canvas = await withTimeout(
+          html2canvas(el, {
+            scale: opts.pngScale,
+            backgroundColor: opts.pngTransparent ? null : getComputedStyle(el).backgroundColor || '#ffffff',
+            useCORS: true,
+          }),
+          30_000,
+          '生成 PNG 超时，请重试或降低分辨率',
+        )
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+        if (!blob) throw new Error('PNG 编码失败')
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        if (desktop) return exportViaDialog(`${base}.png`, '.png', bytes)
+        downloadBytes(`${base}.png`, bytes, 'image/png')
+        return true
+      } finally {
+        restore()
+      }
     }
     case 'pdf': {
       if (desktop) {

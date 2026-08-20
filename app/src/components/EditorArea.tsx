@@ -60,7 +60,10 @@ function EditorAreaInner(props: EditorAreaProps) {
   const { initialMarkdown, settings, theme, onMarkdownChange, onDocChange, apiRef } = props
   const scrollRef = useRef<HTMLDivElement>(null)
   const changeRef = useRef({ onMarkdownChange, onDocChange, typewriter: settings.typewriter })
-  changeRef.current = { onMarkdownChange, onDocChange, typewriter: settings.typewriter }
+
+  useEffect(() => {
+    changeRef.current = { onMarkdownChange, onDocChange, typewriter: settings.typewriter }
+  }, [onMarkdownChange, onDocChange, settings.typewriter])
 
   const keepCursorCentered = (view: EditorView) => {
     const container = scrollRef.current
@@ -145,6 +148,13 @@ function EditorAreaInner(props: EditorAreaProps) {
     }
     return () => { apiRef.current = null }
   }, [get, apiRef])
+
+  // 编辑器就绪后上报一次文档，让大纲/统计/标题在初始加载即有数据
+  useEffect(() => {
+    if (loading) return
+    const view = apiRef.current?.getView()
+    if (view) changeRef.current.onDocChange(view.state.doc)
+  }, [loading, apiRef])
 
   const style: CSSProperties = {
     '--md-page': theme.page,

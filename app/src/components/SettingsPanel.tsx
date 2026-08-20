@@ -1,10 +1,12 @@
 // 设置面板：编辑器 / 字体 / 主题 / 关于
 import { useEffect, useState } from 'react'
 import { Edit, Text, Theme, Info, Close } from '@icon-park/react'
-import { BODY_FONTS, CODE_FONTS, THEMES, type EditorSettings } from '../data'
+import { BODY_FONTS, CODE_FONTS, THEMES, bodyFontStack, codeFontStack, type EditorSettings, type FontPreset, type ThemeTokens } from '../data'
+import { listSystemFonts } from '../lib/platform'
 
 interface SettingsPanelProps {
   settings: EditorSettings
+  theme: ThemeTokens
   onChange: (patch: Partial<EditorSettings>) => void
   onClose: () => void
 }
@@ -47,7 +49,45 @@ function Segmented<T extends string | number>({ options, value, onChange }: {
   )
 }
 
-export default function SettingsPanel({ settings, onChange, onClose }: SettingsPanelProps) {
+/** 字体下拉框：Web 端仅内置预设；桌面端附带系统字体（Rust 枚举） */
+function FontSelect({ presets, fontId, customFont, onPick }: {
+  presets: FontPreset[]
+  fontId: string
+  customFont: string
+  onPick: (patch: { fontId?: string; customFont?: string }) => void
+}) {
+  const [systemFonts, setSystemFonts] = useState<string[] | null>(null)
+  useEffect(() => { void listSystemFonts().then(setSystemFonts) }, [])
+
+  const useCustom = customFont.trim() !== ''
+  const value = useCustom ? `@custom:${customFont.trim()}` : fontId
+
+  return (
+    <select
+      className="font-select"
+      value={value}
+      onChange={(e) => {
+        const v = e.target.value
+        if (v.startsWith('@custom:')) onPick({ customFont: v.slice(8), fontId: presets[0].id })
+        else onPick({ fontId: v, customFont: '' })
+      }}
+    >
+      {presets.map((f) => (
+        <option key={f.id} value={f.id} style={{ fontFamily: f.stack }}>{f.name}</option>
+      ))}
+      {useCustom && <option value={value}>{customFont.trim()}（本地字体）</option>}
+      {systemFonts && systemFonts.length > 0 && (
+        <optgroup label="系统字体">
+          {systemFonts.map((name) => (
+            <option key={name} value={`@custom:${name}`} style={{ fontFamily: `"${name}"` }}>{name}</option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  )
+}
+
+export default function SettingsPanel({ settings, theme, onChange, onClose }: SettingsPanelProps) {
   const [nav, setNav] = useState<NavId>('editor')
 
   useEffect(() => {
@@ -104,54 +144,46 @@ export default function SettingsPanel({ settings, onChange, onClose }: SettingsP
             <>
               <div className="settings-field">
                 <div className="settings-field-head"><span>正文字体</span></div>
-                <div className="font-grid">
-                  {BODY_FONTS.map((f) => (
-                    <button
-                      key={f.id}
-                      className={`font-card${settings.fontId === f.id && !settings.customFont ? ' active' : ''}`}
-                      style={{ fontFamily: f.stack }}
-                      onClick={() => onChange({ fontId: f.id })}
-                    >
-                      {f.name}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  className="text-input"
-                  placeholder="自定义字体名（优先生效，如「霞鹜文楷」）"
-                  value={settings.customFont}
-                  onChange={(e) => onChange({ customFont: e.target.value })}
+                <FontSelect
+                  presets={BODY_FONTS}
+                  fontId={settings.fontId}
+                  customFont={settings.customFont}
+                  onPick={(p) => onChange(p)}
                 />
               </div>
               <div className="settings-field">
                 <div className="settings-field-head"><span>代码块字体</span></div>
-                <div className="font-grid">
-                  {CODE_FONTS.map((f) => (
-                    <button
-                      key={f.id}
-                      className={`font-card mono${settings.codeFontId === f.id && !settings.customCodeFont ? ' active' : ''}`}
-                      style={{ fontFamily: f.stack }}
-                      onClick={() => onChange({ codeFontId: f.id })}
-                    >
-                      {f.name}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  className="text-input mono"
-                  placeholder="自定义代码字体名"
-                  value={settings.customCodeFont}
-                  onChange={(e) => onChange({ customCodeFont: e.target.value })}
+                <FontSelect
+                  presets={CODE_FONTS}
+                  fontId={settings.codeFontId}
+                  customFont={settings.customCodeFont}
+                  onPick={(p) => onChange(p.fontId !== undefined ? { codeFontId: p.fontId, customCodeFont: p.customFont ?? '' } : { customCodeFont: p.customFont ?? '' })}
                 />
               </div>
-              <div className="font-preview-editor-wrap">
+              <div
+                className="font-preview-editor-wrap"
+                style={{
+                  // 注入编辑器排版变量（--md-* 仅存在于编辑区，此处按当前主题/设置补齐，保证预览与编辑区一致）
+                  '--md-text': theme.text,
+                  '--md-sub': theme.sub,
+                  '--md-border': theme.border,
+                  '--md-accent': theme.accent,
+                  '--md-paragraph-spacing': `${settings.paragraphSpacing}em`,
+                  '--md-indent': settings.paragraphIndent === '2char' ? '2em' : '0',
+                } as React.CSSProperties}
+              >
                 <div className="font-preview-title">编辑器预览</div>
-                <div className="miaomoo-prose font-preview-editor" contentEditable={false} suppressContentEditableWarning>
+                <div
+                  className="miaomoo-prose font-preview-editor"
+                  contentEditable={false}
+                  suppressContentEditableWarning
+                  style={{ fontFamily: bodyFontStack(settings), fontSize: Math.min(settings.fontSize, 15), lineHeight: settings.lineHeight }}
+                >
                   <h3>山间明月，江上清风</h3>
                   <p>
                     正文预览：<strong>加粗</strong>、<em>斜体</em>与<code>行内代码</code>都以当前字体渲染。The quick brown fox jumps 0123456789。
                   </p>
-                  <pre><code>{'const note = "Miaomoo Lite";'}</code></pre>
+                  <pre style={{ fontFamily: codeFontStack(settings) }}><code>{'const note = "Miaomoo Lite";\nconsole.log(note);'}</code></pre>
                 </div>
               </div>
             </>

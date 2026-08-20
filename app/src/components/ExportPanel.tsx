@@ -50,21 +50,49 @@ function Pills<T extends string | number>({ options, value, onChange }: {
   )
 }
 
-// 左侧预览：按格式区分形态
-function FormatPreview({ format, title, theme }: { format: ExportFormat; title: string; theme: ThemeTokens }) {
-  const textLines = (
-    <>
-      {[86, 64, 78, 42].map((w, i) => (
-        <div key={i} className="prev-line" style={{ width: `${w}%`, background: theme.border }} />
+// 左侧预览：原型式纸张预览 —— 真实标题 + 正文摘要 + 页脚，按格式叠加形态特征
+function FormatPreview({ format, title, markdown, theme }: { format: ExportFormat; title: string; markdown: string; theme: ThemeTokens }) {
+  // 从 markdown 提取纯文本段落作为预览正文（跳过标题/代码/图片）
+  const paragraphs = useMemo(() => {
+    const lines = markdown
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .split('\n')
+      .filter((l) => !/^\s*#{1,6}\s+/.test(l))
+      .map((l) => l.replace(/^>\s+|^[-*+]\s+|^\d+\.\s+|\*\*|^---$/g, '').trim())
+      .filter(Boolean)
+    return lines.slice(0, 5)
+  }, [markdown])
+
+  const paper = (extra?: React.ReactNode) => (
+    <div className="prev-paper" style={{ background: theme.page, color: theme.text }}>
+      <div className="prev-paper-title">{title || '无标题'}</div>
+      {paragraphs.map((p, i) => (
+        <p key={i} className="prev-paper-line" style={{ color: theme.sub }}>{p}</p>
       ))}
-    </>
+      <div className="prev-paper-footer" style={{ color: theme.accent }}>Miaomoo · Markdown</div>
+      {extra}
+    </div>
   )
+
   switch (format) {
+    case 'png':
+      return paper(<span className="prev-tag" style={{ background: theme.accent, color: theme.accentText }}>PNG</span>)
     case 'pdf':
+      return paper()
+    case 'docx':
+      return paper(<div className="prev-ribbon" style={{ background: theme.accent }} />)
+    case 'txt':
+    case 'rtf':
+      return paper()
+    case 'html':
       return (
-        <div className="prev-a4" style={{ background: theme.page }}>
-          <div className="prev-line" style={{ width: '55%', height: 14, background: theme.sub }} />
-          {textLines}
+        <div className="prev-browser" style={{ background: theme.page }}>
+          <div className="prev-chrome" style={{ background: theme.hover }}>
+            <span /><span /><span />
+            <div className="prev-url" style={{ background: theme.page }}>{title}.html</div>
+          </div>
+          <div className="prev-body">{paper()}</div>
         </div>
       )
     case 'epub':
@@ -73,15 +101,7 @@ function FormatPreview({ format, title, theme }: { format: ExportFormat; title: 
           <div className="prev-cover" style={{ background: theme.accent }}>
             <span style={{ color: theme.accentText }}>{title.slice(0, 8)}</span>
           </div>
-          <div className="prev-page" style={{ background: theme.page }}>{textLines}</div>
-        </div>
-      )
-    case 'txt':
-    case 'rtf':
-      return (
-        <div className="prev-plain mono" style={{ background: theme.page }}>
-          <p>{title}</p>
-          {textLines}
+          {paper()}
         </div>
       )
     case 'textbundle':
@@ -93,35 +113,11 @@ function FormatPreview({ format, title, theme }: { format: ExportFormat; title: 
           <p className="mono">└─ assets/</p>
         </div>
       )
-    case 'html':
-      return (
-        <div className="prev-browser" style={{ background: theme.page }}>
-          <div className="prev-chrome" style={{ background: theme.hover }}>
-            <span /><span /><span />
-            <div className="prev-url" style={{ background: theme.page }}>{title}.html</div>
-          </div>
-          <div className="prev-body">{textLines}</div>
-        </div>
-      )
-    case 'docx':
-      return (
-        <div className="prev-doc" style={{ background: theme.page }}>
-          <div className="prev-doc-head" style={{ background: theme.accent }} />
-          <div className="prev-body">{textLines}</div>
-        </div>
-      )
-    case 'png':
-      return (
-        <div className="prev-png" style={{ background: theme.page }}>
-          <div className="prev-png-frame" style={{ borderColor: theme.accent }}>{textLines}</div>
-          <span className="prev-png-tag" style={{ background: theme.accent, color: theme.accentText }}>PNG</span>
-        </div>
-      )
   }
 }
 
 export default function ExportPanel({ title, markdown, theme, getPayload, onClose, notify }: ExportPanelProps) {
-  const [format, setFormat] = useState<ExportFormat>('pdf')
+  const [format, setFormat] = useState<ExportFormat>('png')
   const [filename, setFilename] = useState(title || '无标题')
   const [pngScale, setPngScale] = useState<1 | 2 | 3>(2)
   const [pngTransparent, setPngTransparent] = useState(false)
@@ -160,13 +156,14 @@ export default function ExportPanel({ title, markdown, theme, getPayload, onClos
         notify('已取消导出')
       }
     } catch (err) {
-      notify(`导出失败：${err instanceof Error ? err.message : '未知错误'}`)
+      // eslint-disable-next-line no-console
+      console.error('[export]', err)
+      const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : String(err)
+      notify(`导出失败：${msg || '未知错误'}`)
     } finally {
       setBusy(false)
     }
   }
-
-  void markdown
 
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
@@ -174,7 +171,7 @@ export default function ExportPanel({ title, markdown, theme, getPayload, onClos
         <button className="modal-close" onClick={onClose} title="关闭"><Close theme="outline" size="16" /></button>
 
         <div className="export-preview" style={{ background: theme.appBg }}>
-          <FormatPreview format={format} title={filename || title || '无标题'} theme={theme} />
+          <FormatPreview format={format} title={filename || title || '无标题'} markdown={markdown} theme={theme} />
         </div>
 
         <div className="export-settings">

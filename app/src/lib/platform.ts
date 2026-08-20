@@ -11,6 +11,17 @@ export function isDesktop(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 }
 
+/** 桌面端：枚举系统字体族（Rust 命令）；Web 版返回 null（仅内置预设） */
+export async function listSystemFonts(): Promise<string[] | null> {
+  if (!isDesktop()) return null
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    return (await invoke<string[]>('list_fonts')).slice().sort((a, b) => a.localeCompare(b))
+  } catch {
+    return null
+  }
+}
+
 /** 桌面端：原生保存对话框；Web 版返回 null（调用方走下载） */
 export async function pickSavePath(defaultName: string, ext: string): Promise<string | null> {
   if (!isDesktop()) return null

@@ -25,7 +25,7 @@ export default function TitleBar({ title, saving, showDetails, onToggleDetails, 
       <span className="title-actions">
         <button
           className={`icon-btn${showDetails ? ' active' : ''}`}
-          title={showDetails ? '隐藏详情' : '显示详情'}
+          title={showDetails ? '收起详情面板' : '详情面板'}
           onClick={onToggleDetails}
           style={showDetails ? { background: theme.hover } : undefined}
         >

@@ -23,16 +23,28 @@ export function saveNote(note: Note) {
   try { localStorage.setItem(NOTE_KEY, JSON.stringify(note)) } catch { /* 存储失败静默 */ }
 }
 
+// 存量设置迁移：v2 起打字机模式默认启用
+const SETTINGS_VERSION = 2
+
 export function loadSettings(): EditorSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<EditorSettings>) }
+    if (raw) {
+      const stored = JSON.parse(raw) as Partial<EditorSettings> & { _v?: number }
+      const { _v, ...patch } = stored
+      if (!_v || _v < SETTINGS_VERSION) {
+        const merged = { ...DEFAULT_SETTINGS, ...patch, typewriter: true }
+        saveSettings(merged)
+        return merged
+      }
+      return { ...DEFAULT_SETTINGS, ...patch }
+    }
   } catch { /* 忽略 */ }
   return { ...DEFAULT_SETTINGS }
 }
 
 export function saveSettings(s: EditorSettings) {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch { /* 忽略 */ }
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...s, _v: SETTINGS_VERSION })) } catch { /* 忽略 */ }
 }
 
 // ── 统计 ──

@@ -66,11 +66,26 @@ fn typst_compile(source: String, out_path: String, paper: String) -> Result<(), 
     Ok(())
 }
 
+/// 枚举系统字体族（供字体下拉框；Web 版不调用）
+#[tauri::command]
+fn list_fonts() -> Vec<String> {
+    use font_kit::source::SystemSource;
+    match SystemSource::new().all_families() {
+        Ok(mut families) => {
+            families.retain(|f| !f.is_empty());
+            families.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+            families.dedup();
+            families
+        }
+        Err(_) => Vec::new(),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_file, write_textbundle, typst_compile])
+        .invoke_handler(tauri::generate_handler![save_file, write_textbundle, typst_compile, list_fonts])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
