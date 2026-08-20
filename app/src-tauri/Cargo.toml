@@ -1,6 +1,7 @@
 [package]
 name = "miaomoo-lite"
 version = "0.1.4"
+license = "MIT"
 description = "Miaomoo Lite — 仿 Bear 的所见即所得 Markdown 笔记编辑器"
 authors = ["JayeGT002"]
 edition = "2021"
