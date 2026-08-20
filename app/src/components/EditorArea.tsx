@@ -62,6 +62,16 @@ function EditorAreaInner(props: EditorAreaProps) {
   const changeRef = useRef({ onMarkdownChange, onDocChange, typewriter: settings.typewriter })
   changeRef.current = { onMarkdownChange, onDocChange, typewriter: settings.typewriter }
 
+  const keepCursorCentered = (view: EditorView) => {
+    const container = scrollRef.current
+    if (!container) return
+    try {
+      const coords = view.coordsAtPos(view.state.selection.head)
+      const top = coords.top - container.getBoundingClientRect().top + container.scrollTop
+      container.scrollTo({ top: top - container.clientHeight / 2, behavior: 'smooth' })
+    } catch { /* 选区无效时忽略 */ }
+  }
+
   const { get, loading } = useEditor((root) => {
     const editor = Editor.make()
       .config((ctx) => {
@@ -118,16 +128,6 @@ function EditorAreaInner(props: EditorAreaProps) {
       .use(upload)
     return editor
   }, [])
-
-  const keepCursorCentered = (view: EditorView) => {
-    const container = scrollRef.current
-    if (!container) return
-    try {
-      const coords = view.coordsAtPos(view.state.selection.head)
-      const top = coords.top - container.getBoundingClientRect().top + container.scrollTop
-      container.scrollTo({ top: top - container.clientHeight / 2, behavior: 'smooth' })
-    } catch { /* 选区无效时忽略 */ }
-  }
 
   useEffect(() => {
     apiRef.current = {

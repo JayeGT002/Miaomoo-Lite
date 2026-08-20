@@ -8,6 +8,9 @@ app/src-tauri/target/
 # tauri generated
 app/src-tauri/gen/
 
+# typst sidecar binaries (downloaded by CI)
+app/src-tauri/binaries/
+
 # logs
 *.log
 

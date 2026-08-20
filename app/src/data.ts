@@ -151,7 +151,7 @@ export interface EditorSettings {
   customCodeFont: string
   fontSize: number // 14–22 px
   lineHeight: number // 1.4–2.2
-  lineWidth: number // 520–860 px
+  lineWidth: number // 520–1440 px
   paragraphSpacing: number // 0.3–1.6 em
   paragraphIndent: 'none' | '2char'
   typewriter: boolean

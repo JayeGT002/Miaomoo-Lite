@@ -1,7 +1,7 @@
 // 设置面板：编辑器 / 字体 / 主题 / 关于
 import { useEffect, useState } from 'react'
 import { Edit, Text, Theme, Info, Close } from '@icon-park/react'
-import { BODY_FONTS, CODE_FONTS, THEMES, bodyFontStack, codeFontStack, type EditorSettings } from '../data'
+import { BODY_FONTS, CODE_FONTS, THEMES, type EditorSettings } from '../data'
 
 interface SettingsPanelProps {
   settings: EditorSettings
@@ -73,7 +73,7 @@ export default function SettingsPanel({ settings, onChange, onClose }: SettingsP
             <>
               <Slider label="字体大小" value={settings.fontSize} min={14} max={22} step={1} unit=" px" onChange={(v) => onChange({ fontSize: v })} />
               <Slider label="行高" value={settings.lineHeight} min={1.4} max={2.2} step={0.1} onChange={(v) => onChange({ lineHeight: v })} />
-              <Slider label="行宽" value={settings.lineWidth} min={520} max={860} step={10} unit=" px" onChange={(v) => onChange({ lineWidth: v })} />
+              <Slider label="行宽" value={settings.lineWidth} min={520} max={1440} step={10} unit=" px" onChange={(v) => onChange({ lineWidth: v })} />
               <Slider label="段落间距" value={settings.paragraphSpacing} min={0.3} max={1.6} step={0.1} unit=" em" onChange={(v) => onChange({ paragraphSpacing: v })} />
               <div className="settings-field">
                 <div className="settings-field-head"><span>段落缩进</span></div>
@@ -144,11 +144,15 @@ export default function SettingsPanel({ settings, onChange, onClose }: SettingsP
                   onChange={(e) => onChange({ customCodeFont: e.target.value })}
                 />
               </div>
-              <div className="font-preview" style={{ fontFamily: bodyFontStack(settings) }}>
-                <p style={{ fontSize: settings.fontSize, lineHeight: settings.lineHeight }}>
-                  山间明月，江上清风 —— 正文预览 The quick brown fox 0123456789
-                </p>
-                <pre style={{ fontFamily: codeFontStack(settings) }}>{'const note = "Miaomoo Lite";'}</pre>
+              <div className="font-preview-editor-wrap">
+                <div className="font-preview-title">编辑器预览</div>
+                <div className="miaomoo-prose font-preview-editor" contentEditable={false} suppressContentEditableWarning>
+                  <h3>山间明月，江上清风</h3>
+                  <p>
+                    正文预览：<strong>加粗</strong>、<em>斜体</em>与<code>行内代码</code>都以当前字体渲染。The quick brown fox jumps 0123456789。
+                  </p>
+                  <pre><code>{'const note = "Miaomoo Lite";'}</code></pre>
+                </div>
               </div>
             </>
           )}
@@ -190,7 +194,7 @@ export default function SettingsPanel({ settings, onChange, onClose }: SettingsP
               </p>
               <div className="about-actions">
                 <a className="about-btn" href="https://github.com/JayeGT002/Miaomoo-Lite" target="_blank" rel="noreferrer">GitHub 仓库</a>
-                <a className="about-btn" href="https://github.com/JayeGT002" target="_blank" rel="noreferrer">项目主页</a>
+                <a className="about-btn ghost" href="https://jayegt002.github.io/Miaomoo-Lite/" target="_blank" rel="noreferrer">官网</a>
               </div>
               <p className="about-footer">Powered by Noctipastor</p>
             </div>

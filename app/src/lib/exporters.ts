@@ -1,8 +1,12 @@
 // 导出能力：8 种格式，轻量实现（禁止大型渲染引擎）
-// PNG=html-to-image / PDF=window.print / HTML·TXT=字符串 / DOCX·RTF=自写模板 / EPUB·TextBundle=fflate 打包
+// PNG=html-to-image / 桌面 PDF=Typst sidecar、Web PDF=window.print / HTML·TXT=字符串
+// DOCX·RTF=自写模板 / EPUB·TextBundle=fflate 打包
+// 桌面端经 platform.ts 走原生保存对话框 + Rust 写文件；Web 版走浏览器下载
 import type { Node as ProseNode } from '@milkdown/prose/model'
 import { toPng } from 'html-to-image'
 import { strToU8, zipSync } from 'fflate'
+import { isDesktop, pickSavePath, saveFileRaw, saveTextBundleRaw, typstCompileRaw, type BundleFile } from './platform'
+import { mdToTypst } from './typst'
 
 export type ExportFormat = 'png' | 'docx' | 'pdf' | 'txt' | 'textbundle' | 'rtf' | 'html' | 'epub'
 
@@ -42,8 +46,8 @@ export interface ExportPayload {
 
 // ── 文档 IR：从 ProseMirror 文档抽取结构 ──
 
-interface InlineRun { text: string; strong?: boolean; em?: boolean; code?: boolean; strike?: boolean; underline?: boolean }
-type Block =
+export interface InlineRun { text: string; strong?: boolean; em?: boolean; code?: boolean; strike?: boolean; underline?: boolean }
+export type Block =
   | { kind: 'heading'; level: number; runs: InlineRun[] }
   | { kind: 'para'; runs: InlineRun[]; quote?: boolean }
   | { kind: 'code'; lang: string; text: string }
@@ -386,10 +390,10 @@ function buildEpub(blocks: Block[], title: string, author: string, withCover: bo
 
 // ── TextBundle ──
 
-function buildTextBundle(markdown: string, withAssets: boolean): Uint8Array {
-  const files: Record<string, Uint8Array> = {
-    'info.json': strToU8(JSON.stringify({ version: 2, type: 'net.daringfireball.markdown', creatorIdentifier: 'com.miaomoo.lite', creatorURL: 'https://github.com/JayeGT002/Miaomoo-Lite', transient: false }, null, 2)),
-  }
+function buildTextBundleFiles(markdown: string, withAssets: boolean): BundleFile[] {
+  const files: BundleFile[] = [
+    { name: 'info.json', data: strToU8(JSON.stringify({ version: 2, type: 'net.daringfireball.markdown', creatorIdentifier: 'com.miaomoo.lite', creatorURL: 'https://github.com/JayeGT002/Miaomoo-Lite', transient: false }, null, 2)) },
+  ]
   let md = markdown
   if (withAssets) {
     const dataUri = /!\[([^\]]*)\]\((data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,([A-Za-z0-9+/=]+))\)/g
@@ -399,12 +403,18 @@ function buildTextBundle(markdown: string, withAssets: boolean): Uint8Array {
       idx++
       const ext = m[3] === 'jpeg' ? 'jpg' : m[3].replace('svg+xml', 'svg')
       const name = `assets/image-${idx}.${ext}`
-      files[name] = Uint8Array.from(atob(m[4]), (c) => c.charCodeAt(0))
-      md = md.replace(m[1] === '' ? m[0] : m[0], m[0].replace(`(${m[2]})`, `(${name})`))
+      files.push({ name, data: Uint8Array.from(atob(m[4]), (c) => c.charCodeAt(0)) })
+      md = md.replace(m[0], m[0].replace(`(${m[2]})`, `(${name})`))
     }
   }
-  files['text.md'] = strToU8(md)
-  return zipSync(files)
+  files.push({ name: 'text.md', data: strToU8(md) })
+  return files
+}
+
+function buildTextBundleZip(markdown: string, withAssets: boolean): Uint8Array {
+  const entries: Record<string, Uint8Array> = {}
+  for (const f of buildTextBundleFiles(markdown, withAssets)) entries[f.name] = f.data
+  return zipSync(entries)
 }
 
 // ── PDF（window.print） ──
@@ -428,43 +438,87 @@ function printPdf(size: 'A4' | 'A5' | 'Letter') {
 
 // ── 入口 ──
 
-export async function runExport(opts: ExportOptions, payload: ExportPayload): Promise<void> {
+/** 桌面端：原生保存对话框 + Rust 写文件；返回 false 表示用户取消 */
+async function exportViaDialog(base: string, ext: string, data: Uint8Array | string): Promise<boolean> {
+  const path = await pickSavePath(base, ext)
+  if (!path) return false
+  await saveFileRaw(path, data)
+  return true
+}
+
+/** 返回 true=已导出（或已打开打印），false=用户在保存对话框取消 */
+export async function runExport(opts: ExportOptions, payload: ExportPayload): Promise<boolean> {
   const { format, filename } = opts
   const blocks = docToBlocks(payload.doc)
   const base = filename || '无标题'
+  const desktop = isDesktop()
   switch (format) {
     case 'txt': {
       const text = toPlainText(blocks)
+      if (desktop) return exportViaDialog(`${base}.txt`, '.txt', `\ufeff${text}`)
       downloadBlob(`${base}.txt`, new Blob([`\ufeff${text}`], { type: 'text/plain;charset=utf-8' }))
-      break
+      return true
     }
     case 'html': {
       const body = toHtmlBody(blocks, null, false)
-      downloadBlob(`${base}.html`, new Blob([toHtmlDoc(payload.title || base, body, opts.htmlInlineStyle)], { type: 'text/html;charset=utf-8' }))
-      break
+      const html = toHtmlDoc(payload.title || base, body, opts.htmlInlineStyle)
+      if (desktop) return exportViaDialog(`${base}.html`, '.html', html)
+      downloadBlob(`${base}.html`, new Blob([html], { type: 'text/html;charset=utf-8' }))
+      return true
     }
-    case 'rtf':
-      downloadBytes(`${base}.rtf`, strToU8(toRtf(blocks, payload.title || base, opts.rtfToc)), 'application/rtf')
-      break
-    case 'docx':
-      downloadBytes(`${base}.docx`, buildDocx(blocks, payload.title || base, opts.docxToc), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-      break
-    case 'epub':
-      downloadBytes(`${base}.epub`, buildEpub(blocks, payload.title || base, opts.epubAuthor, opts.epubCover), 'application/epub+zip')
-      break
-    case 'textbundle':
-      downloadBytes(`${base}.textbundle`, buildTextBundle(payload.markdown, opts.textbundleAssets), 'application/octet-stream')
-      break
+    case 'rtf': {
+      const rtf = toRtf(blocks, payload.title || base, opts.rtfToc)
+      if (desktop) return exportViaDialog(`${base}.rtf`, '.rtf', strToU8(rtf))
+      downloadBytes(`${base}.rtf`, strToU8(rtf), 'application/rtf')
+      return true
+    }
+    case 'docx': {
+      const bytes = buildDocx(blocks, payload.title || base, opts.docxToc)
+      if (desktop) return exportViaDialog(`${base}.docx`, '.docx', bytes)
+      downloadBytes(`${base}.docx`, bytes, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+      return true
+    }
+    case 'epub': {
+      const bytes = buildEpub(blocks, payload.title || base, opts.epubAuthor, opts.epubCover)
+      if (desktop) return exportViaDialog(`${base}.epub`, '.epub', bytes)
+      downloadBytes(`${base}.epub`, bytes, 'application/epub+zip')
+      return true
+    }
+    case 'textbundle': {
+      if (desktop) {
+        // .textbundle 本质是有序文件夹，桌面端直接写目录结构
+        const path = await pickSavePath(`${base}.textbundle`, '.textbundle')
+        if (!path) return false
+        await saveTextBundleRaw(path, buildTextBundleFiles(payload.markdown, opts.textbundleAssets))
+        return true
+      }
+      downloadBytes(`${base}.textbundle`, buildTextBundleZip(payload.markdown, opts.textbundleAssets), 'application/octet-stream')
+      return true
+    }
     case 'png': {
       const el = payload.getContentEl()
-      if (!el) throw new Error('导出 PNG 需要 Tauri 环境')
+      if (!el) throw new Error('未找到编辑内容区域')
       const dataUrl = await toPng(el, { pixelRatio: opts.pngScale, ...(opts.pngTransparent ? {} : { backgroundColor: getComputedStyle(el).backgroundColor || '#ffffff' }) })
-      const res = await fetch(dataUrl)
-      downloadBytes(`${base}.png`, new Uint8Array(await res.arrayBuffer()), 'image/png')
-      break
+      const bytes = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer())
+      if (desktop) return exportViaDialog(`${base}.png`, '.png', bytes)
+      downloadBytes(`${base}.png`, bytes, 'image/png')
+      return true
     }
-    case 'pdf':
+    case 'pdf': {
+      if (desktop) {
+        const path = await pickSavePath(`${base}.pdf`, '.pdf')
+        if (!path) return false
+        try {
+          await typstCompileRaw(mdToTypst(blocks, payload.title || base, opts.pdfSize, opts.pdfToc), path, opts.pdfSize)
+          return true
+        } catch (err) {
+          // sidecar 不可用时兜底系统打印
+          printPdf(opts.pdfSize)
+          throw new Error(`Typst 编译失败（${err instanceof Error ? err.message : '未知原因'}），已打开打印面板兜底`)
+        }
+      }
       printPdf(opts.pdfSize)
-      break
+      return true
+    }
   }
 }

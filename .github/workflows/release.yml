@@ -47,6 +47,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
+      - name: Fetch Typst sidecar (macOS / Linux)
+        if: matrix.platform != 'windows-latest'
+        shell: bash
+        working-directory: app/src-tauri
+        run: |
+          case "${{ matrix.args }}" in
+            *aarch64-apple-darwin*) TRIPLE=aarch64-apple-darwin ;;
+            *x86_64-apple-darwin*)  TRIPLE=x86_64-apple-darwin ;;
+            *)                       TRIPLE=x86_64-unknown-linux-gnu ;;
+          esac
+          curl -fL "https://github.com/typst/typst/releases/latest/download/typst-${TRIPLE}.tar.xz" | tar xJ
+          mkdir -p binaries
+          cp "typst-${TRIPLE}/typst" "binaries/typst-${TRIPLE}"
+          chmod +x "binaries/typst-${TRIPLE}"
+
+      - name: Fetch Typst sidecar (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        working-directory: app/src-tauri
+        run: |
+          $triple = "x86_64-pc-windows-msvc"
+          curl.exe -fL -o typst.zip "https://github.com/typst/typst/releases/latest/download/typst-$triple.zip"
+          Expand-Archive typst.zip -DestinationPath .
+          New-Item -ItemType Directory -Force -Path binaries
+          Copy-Item "typst-$triple/typst.exe" "binaries/typst-$triple.exe"
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:

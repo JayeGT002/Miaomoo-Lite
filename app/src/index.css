@@ -77,6 +77,7 @@ input { font-family: inherit; }
 
 /* ── Milkdown 编辑内容排版 ── */
 .milkdown { outline: none; }
+.miaomoo-prose:focus, .miaomoo-prose.ProseMirror-focused, .ProseMirror:focus { outline: none; }
 .miaomoo-prose {
   font-family: var(--md-font-family);
   font-size: var(--md-font-size);
@@ -132,6 +133,14 @@ input { font-family: inherit; }
 .miaomoo-prose li p { margin: 0; text-indent: 0; }
 .miaomoo-prose hr { border: none; border-top: 1px solid var(--md-border); margin: 1.6em 0; }
 .miaomoo-prose img { max-width: 100%; border-radius: 8px; margin: 0.4em 0; }
+.miaomoo-prose span[data-type='emoji'] img.emoji {
+  width: 1.2em;
+  height: 1.2em;
+  margin: 0 0.05em;
+  border-radius: 0;
+  vertical-align: -0.18em;
+  display: inline-block;
+}
 .miaomoo-prose a { color: var(--md-accent); text-decoration: underline; text-underline-offset: 2px; }
 .miaomoo-prose table {
   border-collapse: collapse;
@@ -420,13 +429,25 @@ input { font-family: inherit; }
   width: 100%;
 }
 .text-input::placeholder { color: var(--panel-sub); }
-.font-preview {
-  background: var(--app-bg);
-  border-radius: 8px;
-  padding: 16px 18px;
-  color: var(--panel-text);
+.font-preview-editor-wrap {
+  margin-top: 6px;
+  border-radius: 12px;
+  background: var(--page);
+  border: 1px solid var(--panel-border);
+  overflow: hidden;
 }
-.font-preview pre { margin: 10px 0 0; font-size: 13px; opacity: 0.85; }
+.font-preview-title {
+  font-size: 11.5px;
+  color: var(--panel-sub);
+  padding: 10px 16px 0;
+}
+.settings-detail .font-preview-editor {
+  max-width: none;
+  margin: 0;
+  padding: 10px 20px 16px;
+  color: var(--md-text);
+}
+.font-preview-editor pre { margin-bottom: 0; }
 .theme-groups { display: flex; flex-direction: column; gap: 16px; }
 .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .theme-card {
@@ -468,6 +489,11 @@ input { font-family: inherit; }
   text-decoration: none;
 }
 .about-btn:hover { opacity: 0.88; }
+.about-btn.ghost {
+  background: transparent;
+  color: var(--panel-text);
+  border: 1px solid var(--panel-border);
+}
 .about-footer { color: var(--panel-sub); font-size: 11.5px; margin: 6px 0 0; }
 
 /* ── 导出面板 ── */

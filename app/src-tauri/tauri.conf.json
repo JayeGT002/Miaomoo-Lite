@@ -29,6 +29,7 @@
     "targets": "all",
     "category": "Productivity",
     "shortDescription": "仿 Bear 的所见即所得 Markdown 笔记编辑器",
+    "externalBin": ["binaries/typst"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

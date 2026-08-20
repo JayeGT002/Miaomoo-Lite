@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Close } from '@icon-park/react'
 import { EXPORT_FORMATS, runExport, type ExportFormat, type ExportOptions } from '../lib/exporters'
+import { isDesktop } from '../lib/platform'
 import type { ThemeTokens } from '../data'
 
 interface ExportPanelProps {
@@ -151,9 +152,13 @@ export default function ExportPanel({ title, markdown, theme, getPayload, onClos
   const doExport = async () => {
     setBusy(true)
     try {
-      await runExport(options, getPayload())
-      notify(format === 'pdf' ? '已打开打印面板，选择「存储为 PDF」' : `已导出 ${filename || '无标题'}${fmt.ext}`)
-      if (format !== 'pdf') onClose()
+      const done = await runExport(options, getPayload())
+      if (done) {
+        notify(format === 'pdf' && !isDesktop() ? '已打开打印面板，选择「存储为 PDF」' : `已导出 ${filename || '无标题'}${fmt.ext}`)
+        onClose()
+      } else {
+        notify('已取消导出')
+      }
     } catch (err) {
       notify(`导出失败：${err instanceof Error ? err.message : '未知错误'}`)
     } finally {
