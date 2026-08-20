@@ -33,7 +33,7 @@ fn write_textbundle(dir: String, files: Vec<BundleFile>) -> Result<(), String> {
 fn typst_binary() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    let triple = env!("TARGET");
+    let triple = env!("APP_TARGET");
     let candidates = [
         dir.join(format!("typst-{triple}")),
         dir.join(format!("typst-{triple}.exe")),

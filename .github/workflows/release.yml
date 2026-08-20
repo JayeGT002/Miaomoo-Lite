@@ -52,14 +52,15 @@ jobs:
         shell: bash
         working-directory: app/src-tauri
         run: |
+          # Linux：typst 官方只发布 musl 静态包，下载后按 gnu triple 命名以匹配 externalBin
           case "${{ matrix.args }}" in
-            *aarch64-apple-darwin*) TRIPLE=aarch64-apple-darwin ;;
-            *x86_64-apple-darwin*)  TRIPLE=x86_64-apple-darwin ;;
-            *)                       TRIPLE=x86_64-unknown-linux-gnu ;;
+            *aarch64-apple-darwin*) PKG=aarch64-apple-darwin; TRIPLE=aarch64-apple-darwin ;;
+            *x86_64-apple-darwin*)  PKG=x86_64-apple-darwin;  TRIPLE=x86_64-apple-darwin ;;
+            *)                      PKG=x86_64-unknown-linux-musl; TRIPLE=x86_64-unknown-linux-gnu ;;
           esac
-          curl -fL "https://github.com/typst/typst/releases/latest/download/typst-${TRIPLE}.tar.xz" | tar xJ
+          curl -fL "https://github.com/typst/typst/releases/latest/download/typst-${PKG}.tar.xz" | tar xJ
           mkdir -p binaries
-          cp "typst-${TRIPLE}/typst" "binaries/typst-${TRIPLE}"
+          cp "typst-${PKG}/typst" "binaries/typst-${TRIPLE}"
           chmod +x "binaries/typst-${TRIPLE}"
 
       - name: Fetch Typst sidecar (Windows)
